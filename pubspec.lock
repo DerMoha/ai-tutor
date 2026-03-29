@@ -747,9 +747,11 @@ packages:
   shared_core:
     dependency: "direct main"
     description:
-      path: "../flowforge/packages/shared_core"
-      relative: true
-    source: path
+      path: "packages/shared_core"
+      ref: main
+      resolved-ref: cfd9acb602b05017828319f56cde212058a407a9
+      url: "git@github.com:DerMoha/FlowForge.git"
+    source: git
     version: "0.1.0"
   shared_preferences:
     dependency: "direct main"
