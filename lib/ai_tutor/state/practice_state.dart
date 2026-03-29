@@ -8,8 +8,8 @@ import '../models/enums.dart';
 import '../models/practice.dart';
 import '../services/ai/ai_provider.dart';
 import '../services/ai/api_key_store.dart';
-import '../services/ai/openai_provider.dart';
 import '../services/ai/practice_prompts.dart';
+import '../services/ai/provider_registry.dart';
 
 class PracticeState extends ChangeNotifier {
   PracticeState({
@@ -17,10 +17,10 @@ class PracticeState extends ChangeNotifier {
     required AiRepository aiRepository,
     required ProgressRepository progressRepository,
     required ApiKeyStore apiKeyStore,
-  })  : _practiceRepo = practiceRepository,
-        _aiRepo = aiRepository,
-        _progressRepo = progressRepository,
-        _keyStore = apiKeyStore {
+  }) : _practiceRepo = practiceRepository,
+       _aiRepo = aiRepository,
+       _progressRepo = progressRepository,
+       _keyStore = apiKeyStore {
     loadAllSessions();
   }
 
@@ -29,10 +29,7 @@ class PracticeState extends ChangeNotifier {
   final ProgressRepository _progressRepo;
   final ApiKeyStore _keyStore;
 
-  final Map<String, AiProvider> _providers = {
-    'openai': OpenAiProvider(),
-    'openrouter': OpenAiProvider(providerId: 'openrouter'),
-  };
+  final Map<String, AiProvider> _providers = AiProviderRegistry.providers;
 
   // Session stack: index 0 = root, last = currently active
   List<PracticeSession> _sessionStack = [];
@@ -165,9 +162,12 @@ class PracticeState extends ChangeNotifier {
 
     // Mark current session as subtask active
     await _practiceRepo.updateSessionStatus(
-        current.id, PracticeSessionStatus.subtaskActive);
-    _sessionStack[_sessionStack.length - 1] =
-        current.copyWith(status: PracticeSessionStatus.subtaskActive);
+      current.id,
+      PracticeSessionStatus.subtaskActive,
+    );
+    _sessionStack[_sessionStack.length - 1] = current.copyWith(
+      status: PracticeSessionStatus.subtaskActive,
+    );
 
     // Create new conversation for sub-session
     final conversation = await _aiRepo.getOrCreateConversation(
@@ -224,9 +224,12 @@ class PracticeState extends ChangeNotifier {
 
       // Update parent status back to inProgress
       await _practiceRepo.updateSessionStatus(
-          parent.id, PracticeSessionStatus.inProgress);
-      _sessionStack[_sessionStack.length - 1] =
-          parent.copyWith(status: PracticeSessionStatus.inProgress);
+        parent.id,
+        PracticeSessionStatus.inProgress,
+      );
+      _sessionStack[_sessionStack.length - 1] = parent.copyWith(
+        status: PracticeSessionStatus.inProgress,
+      );
 
       // Load parent cells
       await _loadActiveCells();
@@ -240,8 +243,9 @@ class PracticeState extends ChangeNotifier {
       }
     } else {
       // Root session complete
-      _sessionStack[0] =
-          current.copyWith(status: PracticeSessionStatus.completed);
+      _sessionStack[0] = current.copyWith(
+        status: PracticeSessionStatus.completed,
+      );
       await loadAllSessions();
     }
 
@@ -252,7 +256,9 @@ class PracticeState extends ChangeNotifier {
   Future<void> abandonSession() async {
     for (final session in _sessionStack) {
       await _practiceRepo.updateSessionStatus(
-          session.id, PracticeSessionStatus.abandoned);
+        session.id,
+        PracticeSessionStatus.abandoned,
+      );
     }
     _sessionStack = [];
     _cells = [];
@@ -289,7 +295,9 @@ class PracticeState extends ChangeNotifier {
     _isGeneratingTask = true;
     _error = null;
     await _practiceRepo.updateSessionStatus(
-        session.id, PracticeSessionStatus.awaitingTask);
+      session.id,
+      PracticeSessionStatus.awaitingTask,
+    );
     notifyListeners();
 
     try {
@@ -349,13 +357,18 @@ class PracticeState extends ChangeNotifier {
       _cells = [..._cells, taskCell, workCell];
 
       await _practiceRepo.updateSessionStatus(
-          session.id, PracticeSessionStatus.inProgress);
-      _sessionStack[_sessionStack.length - 1] =
-          session.copyWith(status: PracticeSessionStatus.inProgress);
+        session.id,
+        PracticeSessionStatus.inProgress,
+      );
+      _sessionStack[_sessionStack.length - 1] = session.copyWith(
+        status: PracticeSessionStatus.inProgress,
+      );
     } catch (e) {
       _error = e.toString();
       await _practiceRepo.updateSessionStatus(
-          session.id, PracticeSessionStatus.inProgress);
+        session.id,
+        PracticeSessionStatus.inProgress,
+      );
     } finally {
       _isGeneratingTask = false;
       notifyListeners();
@@ -378,7 +391,9 @@ class PracticeState extends ChangeNotifier {
     _lastEvaluationTime = now;
 
     await _practiceRepo.updateSessionStatus(
-        session.id, PracticeSessionStatus.evaluating);
+      session.id,
+      PracticeSessionStatus.evaluating,
+    );
     notifyListeners();
 
     try {
@@ -424,8 +439,9 @@ class PracticeState extends ChangeNotifier {
           ? PracticeSessionStatus.completed
           : PracticeSessionStatus.inProgress;
       await _practiceRepo.updateSessionStatus(session.id, newStatus);
-      _sessionStack[_sessionStack.length - 1] =
-          session.copyWith(status: newStatus);
+      _sessionStack[_sessionStack.length - 1] = session.copyWith(
+        status: newStatus,
+      );
 
       // Auto-complete if correct
       if (result.action == PracticeAction.correct) {
@@ -435,9 +451,12 @@ class PracticeState extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       await _practiceRepo.updateSessionStatus(
-          session.id, PracticeSessionStatus.inProgress);
-      _sessionStack[_sessionStack.length - 1] =
-          session.copyWith(status: PracticeSessionStatus.inProgress);
+        session.id,
+        PracticeSessionStatus.inProgress,
+      );
+      _sessionStack[_sessionStack.length - 1] = session.copyWith(
+        status: PracticeSessionStatus.inProgress,
+      );
     } finally {
       _isEvaluating = false;
       notifyListeners();
@@ -488,9 +507,11 @@ class PracticeState extends ChangeNotifier {
 
     // Find work cell
     final workCell = _cells
-        .where((c) =>
-            c.cellType == PracticeCellType.work &&
-            c.cellStatus == CellStatus.active)
+        .where(
+          (c) =>
+              c.cellType == PracticeCellType.work &&
+              c.cellStatus == CellStatus.active,
+        )
         .lastOrNull;
     _workCellId = workCell?.id;
     _currentWork = workCell?.content ?? '';
@@ -502,8 +523,10 @@ class PracticeState extends ChangeNotifier {
     if (taskCell != null) {
       _activeTask = GeneratedTask(
         task: taskCell.content,
-        difficulty: taskCell.metadata['difficulty'] as String? ?? 'intermediate',
-        expectedConcepts: (taskCell.metadata['expected_concepts'] as List?)
+        difficulty:
+            taskCell.metadata['difficulty'] as String? ?? 'intermediate',
+        expectedConcepts:
+            (taskCell.metadata['expected_concepts'] as List?)
                 ?.map((e) => e.toString())
                 .toList() ??
             [],
@@ -524,7 +547,9 @@ class PracticeState extends ChangeNotifier {
 
   Future<AiProvider> _getActiveProvider() async {
     final activeId = await _keyStore.getActiveProviderId();
-    if (activeId == null) throw Exception('No AI provider configured. Go to Settings to add one.');
+    if (activeId == null) {
+      throw Exception('No AI provider configured. Go to Settings to add one.');
+    }
     final provider = _providers[activeId];
     if (provider == null) throw Exception('Unknown provider: $activeId');
     return provider;

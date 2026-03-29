@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../services/ai/ai_provider.dart';
 import '../services/ai/api_key_store.dart';
-import '../services/ai/openai_provider.dart';
+import '../services/ai/provider_registry.dart';
 import '../services/speech_service.dart';
 
 enum VoiceTutorStatus { idle, listening, processing, speaking }
@@ -10,16 +10,13 @@ class VoiceTutorState extends ChangeNotifier {
   VoiceTutorState({
     required SpeechService speechService,
     required ApiKeyStore apiKeyStore,
-  })  : _speech = speechService,
-        _keyStore = apiKeyStore;
+  }) : _speech = speechService,
+       _keyStore = apiKeyStore;
 
   final SpeechService _speech;
   final ApiKeyStore _keyStore;
 
-  final Map<String, AiProvider> _providers = {
-    'openai': OpenAiProvider(),
-    'openrouter': OpenAiProvider(providerId: 'openrouter'),
-  };
+  final Map<String, AiProvider> _providers = AiProviderRegistry.providers;
 
   VoiceTutorStatus _status = VoiceTutorStatus.idle;
   String _recognizedText = '';

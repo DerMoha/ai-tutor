@@ -5,24 +5,21 @@ import '../models/enums.dart';
 import '../models/quiz.dart';
 import '../services/ai/ai_provider.dart';
 import '../services/ai/api_key_store.dart';
-import '../services/ai/openai_provider.dart';
+import '../services/ai/provider_registry.dart';
 
 class QuizState extends ChangeNotifier {
   QuizState({
     required QuizRepository quizRepository,
     required ApiKeyStore apiKeyStore,
-  })  : _repo = quizRepository,
-        _keyStore = apiKeyStore {
+  }) : _repo = quizRepository,
+       _keyStore = apiKeyStore {
     loadQuizzes();
   }
 
   final QuizRepository _repo;
   final ApiKeyStore _keyStore;
 
-  final Map<String, AiProvider> _providers = {
-    'openai': OpenAiProvider(),
-    'openrouter': OpenAiProvider(providerId: 'openrouter'),
-  };
+  final Map<String, AiProvider> _providers = AiProviderRegistry.providers;
 
   // Quiz list
   List<Quiz> _quizzes = [];
@@ -110,8 +107,7 @@ class QuizState extends ChangeNotifier {
         questionTypes: typeNames,
       );
 
-      final responseText =
-          await provider.generateQuiz(runtimeConfig, request);
+      final responseText = await provider.generateQuiz(runtimeConfig, request);
 
       // Parse the JSON response
       final parsed = _parseQuizResponse(responseText, questionTypes);
@@ -178,8 +174,9 @@ class QuizState extends ChangeNotifier {
       }
     }
 
-    final score =
-        _questions.isEmpty ? 0.0 : (correct / _questions.length) * 100;
+    final score = _questions.isEmpty
+        ? 0.0
+        : (correct / _questions.length) * 100;
     _lastScore = score;
 
     if (_activeAttempt != null) {
@@ -236,10 +233,8 @@ class QuizState extends ChangeNotifier {
         orElse: () => QuestionType.multipleChoice,
       );
 
-      final options = (map['options'] as List?)
-              ?.map((o) => o.toString())
-              .toList() ??
-          [];
+      final options =
+          (map['options'] as List?)?.map((o) => o.toString()).toList() ?? [];
 
       return QuizQuestion(
         id: '', // Will be assigned by repository
@@ -247,7 +242,8 @@ class QuizState extends ChangeNotifier {
         type: type,
         prompt: map['question'] as String? ?? map['prompt'] as String? ?? '',
         options: options,
-        correctAnswer: map['correctAnswer'] as String? ??
+        correctAnswer:
+            map['correctAnswer'] as String? ??
             map['correct_answer'] as String? ??
             map['answer'] as String? ??
             '',
