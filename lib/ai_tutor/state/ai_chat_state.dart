@@ -5,25 +5,19 @@ import '../models/conversation.dart';
 import '../models/enums.dart';
 import '../services/ai/ai_provider.dart';
 import '../services/ai/api_key_store.dart';
-import '../services/ai/openai_provider.dart';
+import '../services/ai/provider_registry.dart';
 
 class AiChatState extends ChangeNotifier {
   AiChatState({
     required AiRepository aiRepository,
     required ApiKeyStore apiKeyStore,
-  })  : _repo = aiRepository,
-        _keyStore = apiKeyStore {
+  }) : _repo = aiRepository,
+       _keyStore = apiKeyStore {
     _loadProviders();
   }
 
   final AiRepository _repo;
   final ApiKeyStore _keyStore;
-
-  // Available provider implementations
-  final Map<String, AiProvider> _providers = {
-    'openai': OpenAiProvider(),
-    'openrouter': OpenAiProvider(providerId: 'openrouter'),
-  };
 
   // State
   AiConversation? _conversation;
@@ -93,6 +87,8 @@ class AiChatState extends ChangeNotifier {
   Future<void> sendMessage(String content) async {
     if (_conversation == null || content.trim().isEmpty) return;
 
+    await _loadProviders();
+
     final config = activeConfig;
     if (config == null) {
       _error = 'No AI provider configured. Go to Settings to add one.';
@@ -118,15 +114,11 @@ class AiChatState extends ChangeNotifier {
 
     // Build chat request from conversation history
     final chatMessages = _messages
-        .map((m) => AiChatMessage(
-              role: m.role.name,
-              content: m.content,
-            ))
+        .map((m) => AiChatMessage(role: m.role.name, content: m.content))
         .toList();
 
     // Add the new user message (it might not be in _messages yet)
-    if (chatMessages.isEmpty ||
-        chatMessages.last.content != content.trim()) {
+    if (chatMessages.isEmpty || chatMessages.last.content != content.trim()) {
       chatMessages.add(AiChatMessage(role: 'user', content: content.trim()));
     }
 
@@ -143,7 +135,7 @@ class AiChatState extends ChangeNotifier {
       baseUrl: config.baseUrl,
     );
 
-    final provider = _providers[config.providerId];
+    final provider = AiProviderRegistry.providerFor(config.providerId);
     if (provider == null) {
       _error = 'Provider "${config.providerId}" not found.';
       notifyListeners();
@@ -208,8 +200,9 @@ class AiChatState extends ChangeNotifier {
     await _keyStore.deleteConfig(providerId);
     if (_activeProviderId == providerId) {
       final remaining = await _keyStore.getConfigs();
-      _activeProviderId =
-          remaining.isNotEmpty ? remaining.first.providerId : null;
+      _activeProviderId = remaining.isNotEmpty
+          ? remaining.first.providerId
+          : null;
       if (_activeProviderId != null) {
         await _keyStore.setActiveProviderId(_activeProviderId!);
       }
@@ -231,14 +224,12 @@ class AiChatState extends ChangeNotifier {
     required String model,
     String? baseUrl,
   }) async {
-    final provider = _providers[providerId];
+    final provider = AiProviderRegistry.providerFor(providerId);
     if (provider == null) throw Exception('Unknown provider: $providerId');
 
-    await provider.testConnection(ProviderRuntimeConfig(
-      apiKey: apiKey,
-      model: model,
-      baseUrl: baseUrl,
-    ));
+    await provider.testConnection(
+      ProviderRuntimeConfig(apiKey: apiKey, model: model, baseUrl: baseUrl),
+    );
   }
 
   /// Close the current conversation.

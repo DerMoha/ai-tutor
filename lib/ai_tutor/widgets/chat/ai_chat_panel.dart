@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/conversation.dart';
 import '../../models/enums.dart';
 import '../../state/ai_chat_state.dart';
+import '../../state/provider_config_state.dart';
 
 /// Side panel for AI chat, can be embedded in notebook or document screens.
 class AiChatPanel extends StatefulWidget {
@@ -27,9 +29,9 @@ class _AiChatPanelState extends State<AiChatPanel> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AiChatState>().openConversation(
-            targetType: widget.targetType,
-            targetId: widget.targetId,
-          );
+        targetType: widget.targetType,
+        targetId: widget.targetId,
+      );
     });
   }
 
@@ -62,7 +64,10 @@ class _AiChatPanelState extends State<AiChatPanel> {
   @override
   Widget build(BuildContext context) {
     final chatState = context.watch<AiChatState>();
+    final providerState = context.watch<ProviderConfigState>();
     final theme = Theme.of(context);
+    final activeConfig = _activeConfig(providerState);
+    final hasActiveProvider = activeConfig != null;
 
     // Auto-scroll when new messages arrive or streaming
     if (chatState.messages.isNotEmpty || chatState.isStreaming) {
@@ -75,9 +80,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: theme.dividerColor),
-            ),
+            border: Border(bottom: BorderSide(color: theme.dividerColor)),
           ),
           child: Row(
             children: [
@@ -85,10 +88,10 @@ class _AiChatPanelState extends State<AiChatPanel> {
               const SizedBox(width: 8),
               Text('AI Tutor', style: theme.textTheme.titleSmall),
               const Spacer(),
-              if (chatState.activeConfig != null)
+              if (activeConfig != null)
                 Chip(
                   label: Text(
-                    chatState.activeConfig!.label,
+                    activeConfig.label,
                     style: theme.textTheme.labelSmall,
                   ),
                   visualDensity: VisualDensity.compact,
@@ -102,8 +105,8 @@ class _AiChatPanelState extends State<AiChatPanel> {
           child: chatState.isLoading
               ? const Center(child: CircularProgressIndicator())
               : chatState.messages.isEmpty && !chatState.isStreaming
-                  ? _buildEmptyState(theme)
-                  : _buildMessageList(chatState, theme),
+              ? _buildEmptyState(theme)
+              : _buildMessageList(chatState, theme),
         ),
 
         // Error banner
@@ -121,9 +124,19 @@ class _AiChatPanelState extends State<AiChatPanel> {
           ),
 
         // Input
-        _buildInput(chatState, theme),
+        _buildInput(chatState, theme, hasActiveProvider),
       ],
     );
+  }
+
+  ProviderConfig? _activeConfig(ProviderConfigState providerState) {
+    try {
+      return providerState.configs.firstWhere(
+        (config) => config.providerId == providerState.activeProviderId,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -133,14 +146,19 @@ class _AiChatPanelState extends State<AiChatPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.chat_outlined,
-                size: 48, color: theme.colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.chat_outlined,
+              size: 48,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text('Ask me anything about your material',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center),
+            Text(
+              'Ask me anything about your material',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -170,7 +188,11 @@ class _AiChatPanelState extends State<AiChatPanel> {
     );
   }
 
-  Widget _buildInput(AiChatState chatState, ThemeData theme) {
+  Widget _buildInput(
+    AiChatState chatState,
+    ThemeData theme,
+    bool hasActiveProvider,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -182,17 +204,19 @@ class _AiChatPanelState extends State<AiChatPanel> {
             child: TextField(
               controller: _controller,
               decoration: InputDecoration(
-                hintText: chatState.hasActiveProvider
+                hintText: hasActiveProvider
                     ? 'Ask a question...'
                     : 'Configure a provider in Settings first',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 isDense: true,
               ),
-              enabled: chatState.hasActiveProvider && !chatState.isStreaming,
+              enabled: hasActiveProvider && !chatState.isStreaming,
               maxLines: 3,
               minLines: 1,
               textInputAction: TextInputAction.send,
@@ -201,7 +225,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
           ),
           const SizedBox(width: 8),
           IconButton.filled(
-            onPressed: chatState.hasActiveProvider && !chatState.isStreaming
+            onPressed: hasActiveProvider && !chatState.isStreaming
                 ? _send
                 : null,
             icon: chatState.isStreaming
@@ -262,9 +286,11 @@ class _MessageBubble extends StatelessWidget {
                     children: List.generate(3, (i) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 1),
-                        child: Icon(Icons.circle,
-                            size: 6,
-                            color: theme.colorScheme.onSurfaceVariant),
+                        child: Icon(
+                          Icons.circle,
+                          size: 6,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       );
                     }),
                   ),
